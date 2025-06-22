@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract PolygonBridge is ReentrancyGuard, Ownable {
@@ -18,7 +18,7 @@ contract PolygonBridge is ReentrancyGuard, Ownable {
     mapping(uint256 => bool) public processedNonces;
     uint256 public currentNonce;
     
-    constructor(address _token) {
+    constructor(address _token) Ownable(msg.sender) {
         token = IERC20(_token);
     }
     

@@ -15,8 +15,10 @@ contract GondMockTokenScript is Script {
         gondMockToken = new GondMockToken();
         
         console.log("GondMockToken deployed to:", address(gondMockToken));
-        console.log("Initial supply:", gondMockToken.totalSupply());
-        console.log("Deployer balance:", gondMockToken.balanceOf(msg.sender));
+        console.log("Token name:", gondMockToken.name());
+        console.log("Token symbol:", gondMockToken.symbol());
+        console.log("Deployer balance for token ID 1:", gondMockToken.balanceOf(msg.sender, gondMockToken.TOKEN_ID()));
+        console.log("Initial supply constant:", gondMockToken.INITIAL_SUPPLY());
 
         vm.stopBroadcast();
     }

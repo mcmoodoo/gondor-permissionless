@@ -14,6 +14,8 @@ export default function Layout() {
     activeTab = 'lend';
   } else if (location.pathname.startsWith('/borrow')) {
     activeTab = 'borrow';
+  } else if (location.pathname.startsWith('/lending-protocol')) {
+    activeTab = 'lending-protocol';
   } else if (location.pathname.startsWith('/spend')) {
     activeTab = 'spend';
   }
@@ -97,6 +99,16 @@ export default function Layout() {
                   }`}
                 >
                   Borrow
+                </button>
+                <button
+                  onClick={() => navigate('/lending-protocol')}
+                  className={`px-4 py-1 text-sm font-medium rounded-full transition-colors ${
+                    activeTab === 'lending-protocol'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'bg-transparent text-gray-600'
+                  }`}
+                >
+                  Protocol
                 </button>
                 <button
                   onClick={() => navigate('/spend')}

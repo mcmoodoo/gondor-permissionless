@@ -4,7 +4,6 @@ import BorrowListPage from './components/BorrowListPage';
 import BorrowPoolDetailsPage from './components/BorrowPoolDetailsPage';
 import LendListPage from './components/LendListPage';
 import LendPoolDetailsPage from './components/LendPoolDetailsPage';
-import LendingProtocolPage from './components/LendingProtocolPage';
 import Layout from './components/Layout';
 
 function SpendPage() {
@@ -24,7 +23,6 @@ export default function App() {
         <Route path="/lend/:poolId" element={<LendPoolDetailsPage />} />
         <Route path="/borrow" element={<BorrowListPage />} />
         <Route path="/borrow/:poolId" element={<BorrowPoolDetailsPage />} />
-        <Route path="/lending-protocol" element={<LendingProtocolPage />} />
         <Route path="/spend" element={<SpendPage />} />
         <Route path="*" element={<Navigate to="/borrow" replace />} />
       </Route>

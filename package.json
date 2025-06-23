@@ -1,0 +1,32 @@
+{
+  "name": "bridge-relay-service",
+  "version": "1.0.0",
+  "description": "WebSocket-based bridge relay service for cross-chain token transfers",
+  "main": "relay-service.js",
+  "scripts": {
+    "start": "node relay-service.js",
+    "dev": "nodemon relay-service.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "blockchain",
+    "bridge",
+    "ethereum",
+    "polygon",
+    "bnb",
+    "websocket",
+    "relay"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "ethers": "^6.8.0",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

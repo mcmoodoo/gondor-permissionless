@@ -2,9 +2,9 @@
 pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
-import {PolygonBridge} from "../src/Counter.sol";
+import {PolygonBridge} from "../src/PolygonBridge.sol";
 
-contract CounterScript is Script {
+contract PolygonBridgeScript is Script {
     PolygonBridge public polygonBridge;
 
     function setUp() public {}

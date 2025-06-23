@@ -30,6 +30,230 @@ const SUPPORTED_TOKENS = [
 ];
 
 const CONTRACT_ADDRESS = '0x50288f1E043C0E780D883a27F01e146A1AD95373';
+const BRIDGE_CONTRACT_ADDRESS = '0xa18d1419d7c77479488ed211905c65fc248ea863';
+
+const BRIDGE_CONTRACT_ABI = [
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "_token",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "nonpayable",
+    "type": "constructor"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "string",
+        "name": "destinationAddress",
+        "type": "string"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "nonce",
+        "type": "uint256"
+      }
+    ],
+    "name": "TokensLocked",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "user",
+        "type": "address"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "nonce",
+        "type": "uint256"
+      }
+    ],
+    "name": "TokensUnlocked",
+    "type": "event"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "bridge",
+        "type": "address"
+      }
+    ],
+    "name": "addBridge",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "string",
+        "name": "destinationAddress",
+        "type": "string"
+      }
+    ],
+    "name": "lockTokens",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "to",
+        "type": "address"
+      },
+      {
+        "internalType": "uint256",
+        "name": "tokenId",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "amount",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "nonce",
+        "type": "uint256"
+      }
+    ],
+    "name": "unlockTokens",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "name": "processedNonces",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "currentNonce",
+    "outputs": [
+      {
+        "internalType": "uint256",
+        "name": "",
+        "type": "uint256"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "token",
+    "outputs": [
+      {
+        "internalType": "contract IERC1155",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "",
+        "type": "address"
+      }
+    ],
+    "name": "bridges",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
+];
 
 export default function BorrowPoolDetailsPage() {
   const [depositAmount, setDepositAmount] = useState('');
@@ -221,6 +445,124 @@ export default function BorrowPoolDetailsPage() {
     }
   };
 
+  const switchToPolygon = async () => {
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x89' }], // Polygon Mainnet
+      });
+      return true;
+    } catch (switchError) {
+      // This error code indicates that the chain has not been added to MetaMask.
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: '0x89',
+                chainName: 'Polygon Mainnet',
+                nativeCurrency: {
+                  name: 'MATIC',
+                  symbol: 'MATIC',
+                  decimals: 18,
+                },
+                rpcUrls: ['https://polygon-rpc.com/'],
+                blockExplorerUrls: ['https://polygonscan.com'],
+              },
+            ],
+          });
+          return true;
+        } catch (addError) {
+          console.error('Failed to add Polygon network:', addError);
+          return false;
+        }
+      }
+      console.error('Failed to switch to Polygon:', switchError);
+      return false;
+    }
+  };
+
+  const switchToBNB = async () => {
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: '0x38' }], // BSC Mainnet
+      });
+      return true;
+    } catch (switchError) {
+      // This error code indicates that the chain has not been added to MetaMask.
+      if (switchError.code === 4902) {
+        try {
+          await window.ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [
+              {
+                chainId: '0x38',
+                chainName: 'BNB Smart Chain',
+                nativeCurrency: {
+                  name: 'BNB',
+                  symbol: 'BNB',
+                  decimals: 18,
+                },
+                rpcUrls: ['https://bsc-dataseed.binance.org/'],
+                blockExplorerUrls: ['https://bscscan.com'],
+              },
+            ],
+          });
+          return true;
+        } catch (addError) {
+          console.error('Failed to add BNB network:', addError);
+          return false;
+        }
+      }
+      console.error('Failed to switch to BNB:', switchError);
+      return false;
+    }
+  };
+
+  const handleDepositToPolygon = async () => {
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      throw new Error('Please enter a valid deposit amount greater than 0');
+    }
+
+    // Switch to Polygon
+    const polygonSwitched = await switchToPolygon();
+    if (!polygonSwitched) {
+      throw new Error('Failed to switch to Polygon network');
+    }
+
+    const provider = new BrowserProvider(window.ethereum);
+    const signer = await provider.getSigner();
+    const bridgeContract = new Contract(BRIDGE_CONTRACT_ADDRESS, BRIDGE_CONTRACT_ABI, signer);
+
+    // Verify bridge contract exists
+    const code = await provider.getCode(BRIDGE_CONTRACT_ADDRESS);
+    if (code === '0x') {
+      throw new Error('Bridge contract not found at this address on Polygon');
+    }
+
+    // For the lockTokens function, we need:
+    // - tokenId: Let's use 1 as default (this might need to be dynamic based on the token type)
+    // - amount: The deposit amount from the input
+    // - destinationAddress: The user's wallet address for BNB chain
+    const tokenId = 1; // This might need to be determined based on selected option (YES/NO)
+    const amountInWei = parseUnits(depositAmount, 18);
+    const destinationAddress = walletAddress; // User's address on BNB chain
+
+    // Estimate gas first
+    try {
+      await bridgeContract.lockTokens.estimateGas(tokenId, amountInWei, destinationAddress);
+    } catch (gasError) {
+      console.error('Gas estimation failed:', gasError);
+      throw new Error(`Bridge transaction would fail: ${gasError.reason || gasError.message}`);
+    }
+
+    // Execute the lockTokens transaction
+    const tx = await bridgeContract.lockTokens(tokenId, amountInWei, destinationAddress);
+    return tx;
+  };
+
   const handleBorrowTransaction = async () => {
     if (!walletConnected) {
       setMessage({ text: 'Wallet not connected. Please connect your wallet first.', type: 'error' });
@@ -232,18 +574,44 @@ export default function BorrowPoolDetailsPage() {
       return;
     }
 
+    if (!depositAmount || parseFloat(depositAmount) <= 0) {
+      setMessage({ text: 'Please enter a valid deposit amount greater than 0', type: 'error' });
+      return;
+    }
+
     setLoading(true);
-    setMessage({ text: 'Preparing borrow transaction...', type: 'info' });
+    let polygonTxHash = '';
+    let bnbTxHash = '';
 
     try {
+      // Step 1: Deposit collateral on Polygon
+      setMessage({ text: 'Step 1/2: Depositing collateral on Polygon...', type: 'info' });
+      
+      const polygonTx = await handleDepositToPolygon();
+      polygonTxHash = polygonTx.hash;
+      
+      setMessage({ text: `Polygon deposit submitted! Hash: ${polygonTxHash.substring(0, 10)}... Waiting for confirmation...`, type: 'info' });
+      
+      const polygonReceipt = await polygonTx.wait();
+      setMessage({ text: 'Polygon deposit confirmed! Now switching to BNB for borrowing...', type: 'info' });
+
+      // Step 2: Switch to BNB and execute borrow transaction
+      setMessage({ text: 'Step 2/2: Switching to BNB Smart Chain for borrowing...', type: 'info' });
+      
+      const bnbSwitched = await switchToBNB();
+      if (!bnbSwitched) {
+        throw new Error('Failed to switch to BNB Smart Chain');
+      }
+
+      // Execute borrow transaction on BNB
       const provider = new BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new Contract(CONTRACT_ADDRESS, lendingContractAbi, signer);
 
-      // Verify contract exists
+      // Verify contract exists on BNB
       const code = await provider.getCode(CONTRACT_ADDRESS);
       if (code === '0x') {
-        throw new Error('Contract not found at this address. Please check the network and contract address.');
+        throw new Error('Lending contract not found at this address on BNB Smart Chain. Please check the network and contract address.');
       }
 
       const amountInWei = parseUnits(borrowAmount, 18);
@@ -253,26 +621,33 @@ export default function BorrowPoolDetailsPage() {
         await contract.borrow.estimateGas(amountInWei);
       } catch (gasError) {
         console.error('Gas estimation failed:', gasError);
-        throw new Error(`Transaction would fail: ${gasError.reason || gasError.message}`);
+        throw new Error(`Borrow transaction would fail: ${gasError.reason || gasError.message}`);
       }
 
-      setMessage({ text: 'Opening MetaMask for borrow transaction...', type: 'info' });
+      setMessage({ text: 'Opening MetaMask for borrow transaction on BNB...', type: 'info' });
 
-      const tx = await contract.borrow(amountInWei);
-      setMessage({ text: `Transaction submitted! Hash: ${tx.hash.substring(0, 10)}... Waiting for confirmation...`, type: 'info' });
+      const bnbTx = await contract.borrow(amountInWei);
+      bnbTxHash = bnbTx.hash;
+      
+      setMessage({ text: `Borrow transaction submitted! Hash: ${bnbTxHash.substring(0, 10)}... Waiting for confirmation...`, type: 'info' });
 
-      const receipt = await tx.wait();
-      setMessage({ text: 'Borrow transaction completed successfully! 🎉', type: 'success' });
+      const bnbReceipt = await bnbTx.wait();
+      
+      setMessage({ 
+        text: `🎉 Multi-chain transaction completed successfully!\nPolygon deposit: ${polygonTxHash.substring(0, 10)}...\nBNB borrow: ${bnbTxHash.substring(0, 10)}...`, 
+        type: 'success' 
+      });
       
       // Refresh data
       await fetchContractData();
       await fetchTokenBalances(walletAddress);
       setBorrowAmount('');
+      setDepositAmount('');
       
     } catch (error) {
-      console.error('Error in borrow transaction:', error);
+      console.error('Error in multi-chain borrow transaction:', error);
       
-      let errorMessage = 'Error in borrow transaction';
+      let errorMessage = 'Error in multi-chain transaction';
       
       if (error.code === 4001) {
         errorMessage = 'Transaction rejected by user';
@@ -280,11 +655,20 @@ export default function BorrowPoolDetailsPage() {
         errorMessage = 'Insufficient funds for transaction';
       } else if (error.message.includes('gas')) {
         errorMessage = 'Gas estimation failed. Transaction would likely fail.';
+      } else if (error.message.includes('Failed to switch')) {
+        errorMessage = 'Network switching failed';
       } else if (error.reason) {
         errorMessage = `Transaction failed: ${error.reason}`;
       }
       
-      setMessage({ text: `${errorMessage}: ${error.message}`, type: 'error' });
+      let statusMessage = errorMessage;
+      if (polygonTxHash && !bnbTxHash) {
+        statusMessage += `\nPolygon deposit completed: ${polygonTxHash.substring(0, 10)}...\nBNB borrow failed.`;
+      } else if (polygonTxHash && bnbTxHash) {
+        statusMessage += `\nBoth transactions completed but with errors.`;
+      }
+      
+      setMessage({ text: `${statusMessage}\nError: ${error.message}`, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -302,9 +686,9 @@ export default function BorrowPoolDetailsPage() {
                Info;
 
     return (
-      <div className={`rounded-lg p-4 mb-6 flex items-center space-x-2 ${bgColor}`}>
-        <Icon className="w-5 h-5" />
-        <span>{message.text}</span>
+      <div className={`rounded-lg p-4 mb-6 flex items-start space-x-2 ${bgColor}`}>
+        <Icon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+        <div className="whitespace-pre-line">{message.text}</div>
       </div>
     );
   };

@@ -38,6 +38,7 @@ contract BnbBridge is ERC20, Ownable {
     
     function burnTokens(uint256 amount, string memory polygonAddress) external {
         require(amount > 0, "Amount must be greater than 0");
+        require(bytes(polygonAddress).length > 0, "Invalid polygon address");
         require(balanceOf(msg.sender) >= amount, "Insufficient balance");
         
         burnNonce++;

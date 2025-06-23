@@ -9,7 +9,8 @@ const RELAY_PRIVATE_KEY = process.env.RELAY_PRIVATE_KEY;
 
 const POLYGON_BRIDGE_ABI = [
   "event TokensLocked(address indexed user, uint256 indexed tokenId, uint256 amount, string destinationAddress, uint256 indexed nonce)",
-  "function unlockTokens(address to, uint256 tokenId, uint256 amount, uint256 nonce) external"
+  "function unlockTokens(address to, uint256 tokenId, uint256 amount, uint256 nonce) external",
+  "function processedNonces(uint256) external view returns (bool)"
 ];
 
 const BNB_BRIDGE_ABI = [

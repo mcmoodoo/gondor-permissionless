@@ -13,7 +13,7 @@ contract PolygonBridgeScript is Script {
         vm.startBroadcast();
 
         // Deploy with a placeholder token address - update this to actual token address
-        address tokenAddress = 0x0000000000000000000000000000000000000000;
+        address tokenAddress = 0x3200610BE7fc0e2EebEB92D005e261Cc23453B66;
         polygonBridge = new PolygonBridge(tokenAddress);
 
         vm.stopBroadcast();

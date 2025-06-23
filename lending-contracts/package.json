@@ -1,0 +1,19 @@
+{
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.3.0",
+    "dotenv": "^16.5.0",
+    "ethers": "^6.14.4",
+    "node-fetch": "^2.7.0"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@types/node": "^24.0.3",
+    "@types/node-fetch": "^2.6.12",
+    "hardhat": "^2.24.3"
+  },
+  "scripts": {
+    "oracle:daemon": "ORACLE_ADDRESS=0xfc20692f0031CceD1B2f243eEb8f0d3928A4F185 ts-node scripts/oracleDaemon.ts",
+    "oracle:test": "ORACLE_ADDRESS=0xfc20692f0031CceD1B2f243eEb8f0d3928A4F185 ts-node scripts/testOracle.ts",
+    "oracle:update": "ORACLE_ADDRESS=0xfc20692f0031CceD1B2f243eEb8f0d3928A4F185 ts-node scripts/polymarketOracleUpdater.ts"
+  }
+}

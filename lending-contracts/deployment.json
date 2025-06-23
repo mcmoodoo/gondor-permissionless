@@ -1,0 +1,17 @@
+{
+  "mockUSDTAddress": "0x63d580010Dd6f555aEE3a7Ba21aF1eC2FD3FC508",
+  "lendingPoolAddress": "0x50288f1E043C0E780D883a27F01e146A1AD95373",
+  "collateralToken": "0x29d45175197969c71dd7e2099aa216b45ba0b9cd",
+  "borrowToken": "0x63d580010Dd6f555aEE3a7Ba21aF1eC2FD3FC508",
+  "deployer": "0xe71DB3894A79BeBe377fbD7B601766660Aaea5f9",
+  "initialLiquidity": "100.0",
+  "timestamp": "2025-06-23T19:53:36.047Z",
+  "parameters": {
+    "collateralizationRatio": "200%",
+    "liquidationThreshold": "150%",
+    "liquidationPenalty": "5%",
+    "baseRate": "5%",
+    "rateSlope": "10%",
+    "optimalUtilization": "80%"
+  }
+}

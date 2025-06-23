@@ -1,0 +1,31 @@
+{
+  "timestamp": "2025-06-23T00:40:50.480Z",
+  "summary": {
+    "total": 2,
+    "passed": 1,
+    "failed": 1,
+    "successRate": "50.00%"
+  },
+  "results": [
+    {
+      "testName": "Initial pool has liquidity",
+      "passed": true,
+      "details": {
+        "liquidity": "75.0"
+      }
+    },
+    {
+      "testName": "Initial position is empty",
+      "passed": false,
+      "details": {
+        "collateral": "75000000000000000000",
+        "borrow": "25000000000000000000"
+      }
+    }
+  ],
+  "contracts": {
+    "lendingPool": "0x7ee72380Ae64d46d6E52da950F969aB5dC58e215",
+    "mockUSDT": "0xF083029446763DEfF5A46B7ec6DC832D2D650bae",
+    "no2025Token": "0x6f54Dc8b190a64DD0D29e7179d7ff5755A60b70b"
+  }
+}

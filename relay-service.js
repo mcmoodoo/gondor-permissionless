@@ -28,25 +28,23 @@ class BridgeRelay {
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 5000;
+    this.isShuttingDown = false;
+    this.eventListener = null;
   }
 
   async initialize() {
     try {
       console.log("🚀 Initializing Bridge Relay Service...");
       
-      // Validate environment variables
       if (!POLYGON_BRIDGE_ADDRESS || !BNB_BRIDGE_ADDRESS || !RELAY_PRIVATE_KEY) {
         throw new Error("Missing required environment variables");
       }
 
-      // Setup providers
       this.polygonProvider = new ethers.WebSocketProvider(POLYGON_WSS_RPC);
       this.bnbProvider = new ethers.JsonRpcProvider(BNB_RPC);
       
-      // Setup signer for BNB chain transactions
       this.relaySigner = new ethers.Wallet(RELAY_PRIVATE_KEY, this.bnbProvider);
       
-      // Setup contract instances
       this.polygonBridge = new ethers.Contract(
         POLYGON_BRIDGE_ADDRESS,
         POLYGON_BRIDGE_ABI,
@@ -59,7 +57,6 @@ class BridgeRelay {
         this.relaySigner
       );
 
-      // Test connections
       await this.testConnections();
       
       console.log("✅ Bridge Relay Service initialized successfully");
@@ -75,15 +72,12 @@ class BridgeRelay {
 
   async testConnections() {
     try {
-      // Test Polygon connection
       const polygonNetwork = await this.polygonProvider.getNetwork();
       console.log(`🔗 Connected to Polygon (Chain ID: ${polygonNetwork.chainId})`);
       
-      // Test BNB connection
       const bnbNetwork = await this.bnbProvider.getNetwork();
       console.log(`🔗 Connected to BNB Chain (Chain ID: ${bnbNetwork.chainId})`);
       
-      // Test relay wallet balance
       const balance = await this.bnbProvider.getBalance(await this.relaySigner.getAddress());
       console.log(`💰 Relay wallet balance: ${ethers.formatEther(balance)} BNB`);
       
@@ -97,31 +91,41 @@ class BridgeRelay {
   }
 
   async startListening() {
+    if (this.isShuttingDown) return;
+    
     try {
       console.log("👂 Starting to listen for TokensLocked events...");
       
-      // Setup WebSocket connection error handlers
       this.polygonProvider.websocket.on("error", (error) => {
         console.error("🔌 WebSocket error:", error);
-        this.handleReconnection();
+        if (!this.isShuttingDown) {
+          this.handleReconnection();
+        }
       });
       
       this.polygonProvider.websocket.on("close", () => {
         console.warn("🔌 WebSocket connection closed");
-        this.handleReconnection();
+        if (!this.isShuttingDown) {
+          this.handleReconnection();
+        }
       });
 
-      // Listen for TokensLocked events
-      this.polygonBridge.on("TokensLocked", async (user, tokenId, amount, destinationAddress, nonce, event) => {
-        await this.handleTokensLocked({
-          user,
-          tokenId: tokenId.toString(),
-          amount: amount.toString(),
-          destinationAddress,
-          nonce: nonce.toString(),
-          blockNumber: event.blockNumber,
-          transactionHash: event.transactionHash
-        });
+      this.eventListener = this.polygonBridge.on("TokensLocked", async (user, tokenId, amount, destinationAddress, nonce, event) => {
+        if (this.isShuttingDown) return;
+        
+        try {
+          await this.handleTokensLocked({
+            user,
+            tokenId: tokenId.toString(),
+            amount: amount.toString(),
+            destinationAddress,
+            nonce: nonce.toString(),
+            blockNumber: event.blockNumber,
+            transactionHash: event.transactionHash
+          });
+        } catch (error) {
+          console.error(`❌ Error handling TokensLocked event:`, error.message);
+        }
       });
       
       console.log("🎯 Event listener active. Waiting for TokensLocked events...");
@@ -145,13 +149,11 @@ class BridgeRelay {
     console.log(`  🔗 TX Hash: ${transactionHash}`);
 
     try {
-      // Check if nonce already processed (local cache)
       if (this.processedNonces.has(nonce)) {
         console.log(`⏭️  Nonce ${nonce} already processed locally, skipping...`);
         return;
       }
 
-      // Check if nonce already processed (on-chain)
       const isProcessed = await this.bnbBridge.processedNonces(nonce);
       if (isProcessed) {
         console.log(`⏭️  Nonce ${nonce} already processed on-chain, skipping...`);
@@ -159,89 +161,119 @@ class BridgeRelay {
         return;
       }
 
-      // Wait for block confirmation (safety measure against reorgs)
-      await this.waitForConfirmations(blockNumber, 1);
+      if (blockNumber && typeof blockNumber === 'number') {
+        await this.waitForConfirmations(blockNumber, 1);
+      } else {
+        console.log(`⚠️  No valid block number provided, proceeding without confirmations`);
+      }
 
-      // Relay to BNB chain
       await this.relayToBnbChain(user, amount, nonce);
       
-      // Mark as processed
       this.processedNonces.add(nonce);
       
     } catch (error) {
       console.error(`❌ Failed to handle TokensLocked event for nonce ${nonce}:`, error.message);
       
-      // Don't mark as processed if it failed, allow retry
       if (error.code === 'NONCE_EXPIRED' || error.code === 'REPLACEMENT_UNDERPRICED') {
-        console.log(`🔄 Retrying with adjusted gas settings...`);
-        // Could implement retry logic here
+        console.log(`🔄 Transaction error - nonce issue detected`);
       }
     }
   }
 
   async waitForConfirmations(targetBlock, confirmations) {
-    console.log(`⏳ Waiting for ${confirmations} confirmations...`);
+    if (!targetBlock || typeof targetBlock !== 'number') {
+      console.error(`❌ Invalid target block: ${targetBlock}`);
+      return;
+    }
+
+    console.log(`⏳ Waiting for ${confirmations} confirmations from block ${targetBlock}...`);
     
-    while (true) {
-      const currentBlock = await this.polygonProvider.getBlockNumber();
-      console.log(`Target Block ${targetBlock}`);
-      console.log(`Current Block ${currentBlock}`);
-      if (currentBlock >= targetBlock + confirmations) {
-        console.log(`✅ Confirmed after ${currentBlock - targetBlock} blocks`);
-        break;
+    let attempts = 0;
+    const maxAttempts = 30;
+    
+    while (attempts < maxAttempts && !this.isShuttingDown) {
+      try {
+        const currentBlock = await this.polygonProvider.getBlockNumber();
+        console.log(`Current Block: ${currentBlock}, Target Block: ${targetBlock}`);
+        
+        if (currentBlock >= targetBlock + confirmations) {
+          console.log(`✅ Confirmed after ${currentBlock - targetBlock} blocks`);
+          break;
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        attempts++;
+        
+      } catch (error) {
+        console.error(`❌ Error checking block number:`, error.message);
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 5000));
       }
-      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+    
+    if (attempts >= maxAttempts) {
+      console.warn(`⚠️  Max confirmation attempts reached for block ${targetBlock}`);
     }
   }
 
   async relayToBnbChain(user, amount, nonce) {
     console.log(`🌉 Relaying to BNB Chain...`);
     
-    try {
-      // Estimate gas
-      const gasEstimate = await this.bnbBridge.mintTokens.estimateGas(user, amount, nonce);
-      const gasLimit = gasEstimate * 120n / 100n; // Add 20% buffer
-      
-      // Get current gas price
-      const feeData = await this.bnbProvider.getFeeData();
-      const gasPrice = feeData.gasPrice * 110n / 100n; // Add 10% buffer
-      
-      console.log(`⛽ Gas Limit: ${gasLimit.toString()}, Gas Price: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`);
-      
-      // Execute mint transaction
-      const tx = await this.bnbBridge.mintTokens(user, amount, nonce, {
-        gasLimit,
-        gasPrice
-      });
-      
-      console.log(`📤 Mint transaction sent: ${tx.hash}`);
-      console.log(`⏳ Waiting for confirmation...`);
-      
-      const receipt = await tx.wait();
-      
-      if (receipt.status === 1) {
-        console.log(`✅ Tokens minted successfully on BNB Chain!`);
-        console.log(`  📦 Block: ${receipt.blockNumber}`);
-        console.log(`  ⛽ Gas Used: ${receipt.gasUsed.toString()}`);
-        console.log(`  💰 Amount Minted: ${amount} to ${user}`);
-      } else {
-        throw new Error("Transaction failed");
+    let retryCount = 0;
+    const maxRetries = 3;
+    
+    while (retryCount < maxRetries && !this.isShuttingDown) {
+      try {
+        const gasEstimate = await this.bnbBridge.mintTokens.estimateGas(user, amount, nonce);
+        const gasLimit = gasEstimate * 120n / 100n;
+        
+        const feeData = await this.bnbProvider.getFeeData();
+        const gasPrice = feeData.gasPrice * 110n / 100n;
+        
+        console.log(`⛽ Gas Limit: ${gasLimit.toString()}, Gas Price: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`);
+        
+        const tx = await this.bnbBridge.mintTokens(user, amount, nonce, {
+          gasLimit,
+          gasPrice
+        });
+        
+        console.log(`📤 Mint transaction sent: ${tx.hash}`);
+        console.log(`⏳ Waiting for confirmation...`);
+        
+        const receipt = await tx.wait();
+        
+        if (receipt.status === 1) {
+          console.log(`✅ Tokens minted successfully on BNB Chain!`);
+          console.log(`  📦 Block: ${receipt.blockNumber}`);
+          console.log(`  ⛽ Gas Used: ${receipt.gasUsed.toString()}`);
+          console.log(`  💰 Amount Minted: ${amount} to ${user}`);
+          return;
+        } else {
+          throw new Error("Transaction failed");
+        }
+        
+      } catch (error) {
+        retryCount++;
+        console.error(`❌ Relay transaction failed (attempt ${retryCount}/${maxRetries}):`, error.message);
+        
+        if (error.code === 'INSUFFICIENT_FUNDS') {
+          console.error("💸 Insufficient funds in relay wallet. Please fund the wallet.");
+          throw error;
+        }
+        
+        if (retryCount < maxRetries) {
+          console.log(`🔄 Retrying in 5 seconds...`);
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        } else {
+          throw error;
+        }
       }
-      
-    } catch (error) {
-      console.error(`❌ Relay transaction failed:`, error);
-      
-      if (error.code === 'INSUFFICIENT_FUNDS') {
-        console.error("💸 Insufficient funds in relay wallet. Please fund the wallet.");
-      } else if (error.reason) {
-        console.error(`🔍 Revert reason: ${error.reason}`);
-      }
-      
-      throw error;
     }
   }
 
   async handleReconnection() {
+    if (this.isShuttingDown) return;
+    
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error("❌ Max reconnection attempts reached. Exiting...");
       process.exit(1);
@@ -253,10 +285,10 @@ class BridgeRelay {
     await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
     
     try {
-      // Remove all listeners
-      this.polygonBridge.removeAllListeners();
+      if (this.polygonBridge) {
+        this.polygonBridge.removeAllListeners();
+      }
       
-      // Recreate WebSocket provider
       this.polygonProvider = new ethers.WebSocketProvider(POLYGON_WSS_RPC);
       this.polygonBridge = new ethers.Contract(
         POLYGON_BRIDGE_ADDRESS,
@@ -264,7 +296,6 @@ class BridgeRelay {
         this.polygonProvider
       );
       
-      // Restart listening
       await this.startListening();
       
       console.log("✅ Reconnection successful");
@@ -272,12 +303,15 @@ class BridgeRelay {
       
     } catch (error) {
       console.error("❌ Reconnection failed:", error.message);
-      this.handleReconnection();
+      if (!this.isShuttingDown) {
+        this.handleReconnection();
+      }
     }
   }
 
   async stop() {
     console.log("🛑 Stopping Bridge Relay Service...");
+    this.isShuttingDown = true;
     
     if (this.polygonBridge) {
       this.polygonBridge.removeAllListeners();
@@ -291,7 +325,6 @@ class BridgeRelay {
   }
 }
 
-// Handle process signals
 process.on('SIGINT', async () => {
   console.log('\n🛑 Received SIGINT. Shutting down gracefully...');
   if (global.relayService) {
@@ -308,7 +341,6 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-// Main execution
 async function main() {
   try {
     const relayService = new BridgeRelay();
@@ -323,7 +355,6 @@ async function main() {
   }
 }
 
-// Start the service
 if (require.main === module) {
   main();
 }

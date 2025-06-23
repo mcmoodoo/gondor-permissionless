@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, Info, X, Check } from 'lucide-react';
-import bscLogo from '../bnb-chain-binance-smart-chain-logo.png';
-import Jazzicon from 'react-jazzicon';
-import { useNavigate, useLocation, useParams } from 'react-router-dom';
-import { BrowserProvider, Contract, formatUnits } from 'ethers';
+import { ChevronLeft, Info, X, Check, AlertTriangle, CheckCircle } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { BrowserProvider, Contract, formatUnits, parseUnits } from 'ethers';
 import erc20Abi from '../erc20Abi.json';
+import lendingContractAbi from '../lendingContractAbi.json';
 
 const SUPPORTED_TOKENS = [
   {
@@ -30,21 +29,37 @@ const SUPPORTED_TOKENS = [
   },
 ];
 
+const CONTRACT_ADDRESS = '0x50288f1E043C0E780D883a27F01e146A1AD95373';
+
 export default function BorrowPoolDetailsPage() {
   const [depositAmount, setDepositAmount] = useState('');
   const [borrowAmount, setBorrowAmount] = useState('');
   const [selectedOption, setSelectedOption] = useState('NO');
   const [walletConnected, setWalletConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState('');
-  const [isConnecting, setIsConnecting] = useState(false);
   const [depositFocused, setDepositFocused] = useState(false);
   const [borrowFocused, setBorrowFocused] = useState(false);
-  const [selectedCoin, setSelectedCoin] = useState('USDT');
   const [tokenBalances, setTokenBalances] = useState([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [selectedToken, setSelectedToken] = useState(SUPPORTED_TOKENS[0]);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ text: '', type: '' });
+  const [networkInfo, setNetworkInfo] = useState({ chainId: null, chainName: 'Unknown' });
+  const [poolInfo, setPoolInfo] = useState({
+    totalSupply: '0',
+    totalBorrowed: '0',
+    utilizationRate: '0',
+    supplyRate: '0',
+    borrowRate: '0'
+  });
+  const [userPosition, setUserPosition] = useState({
+    supplied: '0',
+    borrowed: '0',
+    collateral: '0'
+  });
+  const [borrowableAmount, setBorrowableAmount] = useState('0');
+  const [oraclePrice, setOraclePrice] = useState('0');
   const navigate = useNavigate();
-  const location = useLocation();
   const { poolId } = useParams();
 
   // Calculate LTV dynamically
@@ -73,6 +88,7 @@ export default function BorrowPoolDetailsPage() {
   useEffect(() => {
     if (walletConnected && walletAddress) {
       fetchTokenBalances(walletAddress);
+      fetchContractData();
     }
     // eslint-disable-next-line
   }, [walletConnected, walletAddress]);
@@ -80,6 +96,10 @@ export default function BorrowPoolDetailsPage() {
   const checkWalletConnection = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
+        const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+        const chainName = getChainName(chainId);
+        setNetworkInfo({ chainId, chainName });
+        
         const accounts = await window.ethereum.request({ method: 'eth_accounts' });
         if (accounts.length > 0) {
           setWalletConnected(true);
@@ -91,42 +111,20 @@ export default function BorrowPoolDetailsPage() {
     }
   };
 
-  const connectWallet = async () => {
-    if (typeof window.ethereum === 'undefined') {
-      alert('MetaMask is not installed. Please install MetaMask to use this feature.');
-      return;
-    }
-
-    setIsConnecting(true);
-    try {
-      const accounts = await window.ethereum.request({
-        method: 'eth_requestAccounts'
-      });
-      
-      if (accounts.length > 0) {
-        setWalletConnected(true);
-        setWalletAddress(accounts[0]);
-      }
-    } catch (error) {
-      console.error('Error connecting wallet:', error);
-      if (error.code === 4001) {
-        alert('Please connect your MetaMask wallet to continue.');
-      } else {
-        alert('Error connecting wallet. Please try again.');
-      }
-    } finally {
-      setIsConnecting(false);
-    }
+  const getChainName = (chainId) => {
+    const chains = {
+      '0x1': 'Ethereum Mainnet',
+      '0x89': 'Polygon',
+      '0x38': 'BSC Mainnet',
+      '0x61': 'BSC Testnet',
+      '0x5': 'Goerli Testnet',
+      '0xaa36a7': 'Sepolia Testnet',
+      '0xa': 'Optimism',
+      '0xa4b1': 'Arbitrum One'
+    };
+    return chains[chainId] || `Unknown (${chainId})`;
   };
 
-  const disconnectWallet = () => {
-    setWalletConnected(false);
-    setWalletAddress('');
-  };
-
-  const formatAddress = (address) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  };
 
   const handleOptionChange = (e) => {
     setSelectedOption(e.target.value);
@@ -144,8 +142,6 @@ export default function BorrowPoolDetailsPage() {
     setBorrowAmount(numericValue);
   };
 
-  // Mock wallet coins for demo; in real app, fetch from wallet
-  const walletCoins = walletConnected ? ['USDT', 'USDC'] : ['USDT'];
 
   const fetchTokenBalances = async (address) => {
     if (!window.ethereum) return;
@@ -170,6 +166,149 @@ export default function BorrowPoolDetailsPage() {
     setSelectedToken(firstWithBalance);
   };
 
+  const fetchContractData = async () => {
+    if (!window.ethereum || !walletAddress) {
+      return;
+    }
+
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const contract = new Contract(CONTRACT_ADDRESS, lendingContractAbi, provider);
+
+      // Test if contract exists
+      const code = await provider.getCode(CONTRACT_ADDRESS);
+      if (code === '0x') {
+        throw new Error('No contract found at this address');
+      }
+
+      // Fetch pool info
+      const poolData = await contract.getPoolInfo();
+      setPoolInfo({
+        totalSupply: formatUnits(poolData[0], 18),
+        totalBorrowed: formatUnits(poolData[1], 18),
+        utilizationRate: formatUnits(poolData[2], 16),
+        supplyRate: formatUnits(poolData[3], 16),
+        borrowRate: formatUnits(poolData[4], 16)
+      });
+
+      // Fetch user position
+      const position = await contract.getPosition(walletAddress);
+      setUserPosition({
+        supplied: formatUnits(position[0], 18),
+        borrowed: formatUnits(position[1], 18),
+        collateral: formatUnits(position[2], 18)
+      });
+
+      // Fetch borrowable amount
+      const borrowable = await contract.getBorrowableAmount(walletAddress);
+      setBorrowableAmount(formatUnits(borrowable, 18));
+
+      // Fetch oracle price
+      const price = await contract.getOraclePrice();
+      setOraclePrice(formatUnits(price, 18));
+
+    } catch (error) {
+      console.error('Error fetching contract data:', error);
+      let errorMessage = 'Error fetching contract data';
+      
+      if (error.message.includes('network')) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.message.includes('revert')) {
+        errorMessage = 'Contract call reverted. The contract may not be properly deployed.';
+      }
+      
+      setMessage({ text: `${errorMessage}: ${error.message}`, type: 'error' });
+    }
+  };
+
+  const handleBorrowTransaction = async () => {
+    if (!walletConnected) {
+      setMessage({ text: 'Wallet not connected. Please connect your wallet first.', type: 'error' });
+      return;
+    }
+
+    if (!borrowAmount || parseFloat(borrowAmount) <= 0) {
+      setMessage({ text: 'Please enter a valid borrow amount greater than 0', type: 'error' });
+      return;
+    }
+
+    setLoading(true);
+    setMessage({ text: 'Preparing borrow transaction...', type: 'info' });
+
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, lendingContractAbi, signer);
+
+      // Verify contract exists
+      const code = await provider.getCode(CONTRACT_ADDRESS);
+      if (code === '0x') {
+        throw new Error('Contract not found at this address. Please check the network and contract address.');
+      }
+
+      const amountInWei = parseUnits(borrowAmount, 18);
+
+      // Estimate gas before sending transaction
+      try {
+        await contract.borrow.estimateGas(amountInWei);
+      } catch (gasError) {
+        console.error('Gas estimation failed:', gasError);
+        throw new Error(`Transaction would fail: ${gasError.reason || gasError.message}`);
+      }
+
+      setMessage({ text: 'Opening MetaMask for borrow transaction...', type: 'info' });
+
+      const tx = await contract.borrow(amountInWei);
+      setMessage({ text: `Transaction submitted! Hash: ${tx.hash.substring(0, 10)}... Waiting for confirmation...`, type: 'info' });
+
+      const receipt = await tx.wait();
+      setMessage({ text: 'Borrow transaction completed successfully! 🎉', type: 'success' });
+      
+      // Refresh data
+      await fetchContractData();
+      await fetchTokenBalances(walletAddress);
+      setBorrowAmount('');
+      
+    } catch (error) {
+      console.error('Error in borrow transaction:', error);
+      
+      let errorMessage = 'Error in borrow transaction';
+      
+      if (error.code === 4001) {
+        errorMessage = 'Transaction rejected by user';
+      } else if (error.message.includes('insufficient funds')) {
+        errorMessage = 'Insufficient funds for transaction';
+      } else if (error.message.includes('gas')) {
+        errorMessage = 'Gas estimation failed. Transaction would likely fail.';
+      } else if (error.reason) {
+        errorMessage = `Transaction failed: ${error.reason}`;
+      }
+      
+      setMessage({ text: `${errorMessage}: ${error.message}`, type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderMessage = () => {
+    if (!message.text) return null;
+
+    const bgColor = message.type === 'error' ? 'bg-red-100 text-red-700' :
+                   message.type === 'success' ? 'bg-green-100 text-green-700' :
+                   'bg-blue-100 text-blue-700';
+
+    const Icon = message.type === 'error' ? AlertTriangle :
+               message.type === 'success' ? CheckCircle :
+               Info;
+
+    return (
+      <div className={`rounded-lg p-4 mb-6 flex items-center space-x-2 ${bgColor}`}>
+        <Icon className="w-5 h-5" />
+        <span>{message.text}</span>
+      </div>
+    );
+  };
+
   // Calculate the dynamic value for the small number under the borrow field
   const borrowMinusOnePercent = borrowAmount && !isNaN(parseFloat(borrowAmount))
     ? (parseFloat(borrowAmount) * 0.99999).toFixed(2)
@@ -184,6 +323,8 @@ export default function BorrowPoolDetailsPage() {
           Back to pools
         </button>
 
+        {renderMessage()}
+
         <h2 className="text-xl font-bold text-gray-900 mb-4">Pool info: {decodeURIComponent(poolId)}</h2>
         <div className="bg-white rounded-xl shadow-sm p-6">
           <div className="flex items-center justify-between">
@@ -195,21 +336,21 @@ export default function BorrowPoolDetailsPage() {
             <div className="flex items-center divide-x divide-gray-200">
               <div className="text-center pr-6">
                 <div className="text-sm text-gray-500 mb-1">Total supply</div>
-                <div className="text-2xl font-bold text-gray-900">$2.03M</div>
+                <div className="text-2xl font-bold text-gray-900">{parseFloat(poolInfo.totalSupply).toFixed(2)} ETH</div>
               </div>
               <div className="text-center px-6">
                 <div className="text-sm text-gray-500 mb-1">Total borrowed</div>
-                <div className="text-2xl font-bold text-gray-900">$0.97M</div>
+                <div className="text-2xl font-bold text-gray-900">{parseFloat(poolInfo.totalBorrowed).toFixed(2)} ETH</div>
               </div>
               <div className="text-center px-6">
                 <div className="text-sm text-gray-500 mb-1 flex items-center justify-center">
                   Borrow rate <Info className="w-3 h-3 ml-1 text-gray-400" />
                 </div>
-                <div className="text-2xl font-bold text-gray-900">4.98%</div>
+                <div className="text-2xl font-bold text-gray-900">{parseFloat(poolInfo.borrowRate).toFixed(2)}%</div>
               </div>
               <div className="text-center pl-6">
-                <div className="text-sm text-gray-500 mb-1">Share price</div>
-                <div className="text-2xl font-bold text-gray-900">¢67</div>
+                <div className="text-sm text-gray-500 mb-1">Oracle price</div>
+                <div className="text-2xl font-bold text-gray-900">${parseFloat(oraclePrice).toFixed(2)}</div>
               </div>
             </div>
           </div>
@@ -369,10 +510,11 @@ export default function BorrowPoolDetailsPage() {
                 </div>
 
                 <button
-                  disabled={ltvValue > 82}
+                  onClick={handleBorrowTransaction}
+                  disabled={ltvValue > 82 || loading || !walletConnected || !borrowAmount}
                   className="w-48 bg-gradient-to-br from-blue-400 to-blue-600 text-white py-3 rounded-full font-medium shadow-md transition-transform transform enabled:hover:scale-105 enabled:hover:from-blue-500 enabled:hover:to-blue-700 disabled:bg-none disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none"
                 >
-                  Borrow
+                  {loading ? 'Processing...' : 'Borrow'}
                 </button>
               </div>
             </div>
@@ -384,28 +526,28 @@ export default function BorrowPoolDetailsPage() {
             
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-gray-700">Liquidation price</span>
-                <span className="font-medium text-gray-900">¢45</span>
+                <span className="text-gray-700">Supplied</span>
+                <span className="font-medium text-gray-900">{parseFloat(userPosition.supplied).toFixed(6)} ETH</span>
               </div>
               
               <div className="flex justify-between items-center">
-                <span className="text-gray-700">Liquidation LTV</span>
-                <span className="font-medium text-gray-900">50%</span>
+                <span className="text-gray-700">Borrowed</span>
+                <span className="font-medium text-gray-900">{parseFloat(userPosition.borrowed).toFixed(6)} ETH</span>
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <span className="text-gray-700">Collateral</span>
+                <span className="font-medium text-gray-900">{parseFloat(userPosition.collateral).toFixed(6)} ETH</span>
+              </div>
+              
+              <div className="flex justify-between items-center">
+                <span className="text-gray-700">Borrowable Amount</span>
+                <span className="font-medium text-green-600">{parseFloat(borrowableAmount).toFixed(6)} ETH</span>
               </div>
               
               <div className="flex justify-between items-center">
                 <span className="text-gray-700">Current LTV</span>
-                <span className="font-medium text-gray-900">33.02%</span>
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Current loan</span>
-                <span className="font-medium text-gray-900">$ 552.75</span>
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Health rate</span>
-                <span className="font-medium text-green-600">3.74</span>
+                <span className="font-medium text-gray-900">{ltvValue.toFixed(2)}%</span>
               </div>
             </div>
           </div>

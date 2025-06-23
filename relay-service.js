@@ -8,13 +8,15 @@ const BNB_BRIDGE_ADDRESS = process.env.BNB_BRIDGE_ADDRESS;
 const RELAY_PRIVATE_KEY = process.env.RELAY_PRIVATE_KEY;
 
 const POLYGON_BRIDGE_ABI = [
-  "event TokensLocked(address indexed user, uint256 indexed tokenId, uint256 amount, string destinationAddress, uint256 indexed nonce)"
+  "event TokensLocked(address indexed user, uint256 indexed tokenId, uint256 amount, string destinationAddress, uint256 indexed nonce)",
+  "function unlockTokens(address to, uint256 tokenId, uint256 amount, uint256 nonce) external"
 ];
 
 const BNB_BRIDGE_ABI = [
   "function mintTokens(address to, uint256 amount, uint256 nonce) external",
   "function processedNonces(uint256) external view returns (bool)",
-  "event TokensMinted(address indexed to, uint256 amount, uint256 indexed nonce)"
+  "event TokensMinted(address indexed to, uint256 amount, uint256 indexed nonce)",
+  "event TokensBurned(address indexed from, uint256 amount, string polygonAddress, uint256 indexed nonce)"
 ];
 
 class BridgeRelay {
@@ -24,12 +26,15 @@ class BridgeRelay {
     this.polygonBridge = null;
     this.bnbBridge = null;
     this.relaySigner = null;
+    this.polygonSigner = null;
     this.processedNonces = new Set();
+    this.processedBurnNonces = new Set();
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 5000;
     this.isShuttingDown = false;
     this.eventListener = null;
+    this.burnEventListener = null;
   }
 
   async initialize() {
@@ -44,11 +49,18 @@ class BridgeRelay {
       this.bnbProvider = new ethers.JsonRpcProvider(BNB_RPC);
       
       this.relaySigner = new ethers.Wallet(RELAY_PRIVATE_KEY, this.bnbProvider);
+      this.polygonSigner = new ethers.Wallet(RELAY_PRIVATE_KEY, this.polygonProvider);
       
       this.polygonBridge = new ethers.Contract(
         POLYGON_BRIDGE_ADDRESS,
         POLYGON_BRIDGE_ABI,
         this.polygonProvider
+      );
+      
+      this.polygonBridgeSigner = new ethers.Contract(
+        POLYGON_BRIDGE_ADDRESS,
+        POLYGON_BRIDGE_ABI,
+        this.polygonSigner
       );
       
       this.bnbBridge = new ethers.Contract(
@@ -94,7 +106,7 @@ class BridgeRelay {
     if (this.isShuttingDown) return;
     
     try {
-      console.log("👂 Starting to listen for TokensLocked events...");
+      console.log("👂 Starting to listen for TokensLocked and TokensBurned events...");
       
       this.polygonProvider.websocket.on("error", (error) => {
         console.error("🔌 WebSocket error:", error);
@@ -127,8 +139,25 @@ class BridgeRelay {
           console.error(`❌ Error handling TokensLocked event:`, error.message);
         }
       });
+
+      this.burnEventListener = this.bnbBridge.on("TokensBurned", async (from, amount, polygonAddress, nonce, event) => {
+        if (this.isShuttingDown) return;
+        
+        try {
+          await this.handleTokensBurned({
+            from,
+            amount: amount.toString(),
+            polygonAddress,
+            nonce: nonce.toString(),
+            blockNumber: event.blockNumber,
+            transactionHash: event.transactionHash
+          });
+        } catch (error) {
+          console.error(`❌ Error handling TokensBurned event:`, error.message);
+        }
+      });
       
-      console.log("🎯 Event listener active. Waiting for TokensLocked events...");
+      console.log("🎯 Event listeners active. Waiting for TokensLocked and TokensBurned events...");
       
     } catch (error) {
       console.error("❌ Failed to start listening:", error.message);
@@ -271,6 +300,101 @@ class BridgeRelay {
     }
   }
 
+  async handleTokensBurned(eventData) {
+    const { from, amount, polygonAddress, nonce, blockNumber, transactionHash } = eventData;
+    
+    console.log(`\n🔥 TokensBurned Event Detected:`);
+    console.log(`  👤 From: ${from}`);
+    console.log(`  💰 Amount: ${amount}`);
+    console.log(`  📍 Polygon Address: ${polygonAddress}`);
+    console.log(`  🎯 Nonce: ${nonce}`);
+    console.log(`  📦 Block: ${blockNumber}`);
+    console.log(`  🔗 TX Hash: ${transactionHash}`);
+
+    try {
+      if (this.processedBurnNonces.has(nonce)) {
+        console.log(`⏭️  Burn nonce ${nonce} already processed locally, skipping...`);
+        return;
+      }
+
+      const isProcessed = await this.polygonBridge.processedNonces(nonce);
+      if (isProcessed) {
+        console.log(`⏭️  Burn nonce ${nonce} already processed on-chain, skipping...`);
+        this.processedBurnNonces.add(nonce);
+        return;
+      }
+
+      if (blockNumber && typeof blockNumber === 'number') {
+        await this.waitForConfirmations(blockNumber, 1);
+      } else {
+        console.log(`⚠️  No valid block number provided, proceeding without confirmations`);
+      }
+
+      await this.relayToPolygonChain(polygonAddress, amount, nonce);
+      
+      this.processedBurnNonces.add(nonce);
+      
+    } catch (error) {
+      console.error(`❌ Failed to handle TokensBurned event for nonce ${nonce}:`, error.message);
+    }
+  }
+
+  async relayToPolygonChain(to, amount, nonce) {
+    console.log(`🌉 Relaying to Polygon Chain...`);
+    
+    let retryCount = 0;
+    const maxRetries = 3;
+    const tokenId = 1;
+    
+    while (retryCount < maxRetries && !this.isShuttingDown) {
+      try {
+        const gasEstimate = await this.polygonBridgeSigner.unlockTokens.estimateGas(to, tokenId, amount, nonce);
+        const gasLimit = gasEstimate * 120n / 100n;
+        
+        const feeData = await this.polygonProvider.getFeeData();
+        const gasPrice = feeData.gasPrice * 110n / 100n;
+        
+        console.log(`⛽ Gas Limit: ${gasLimit.toString()}, Gas Price: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`);
+        
+        const tx = await this.polygonBridgeSigner.unlockTokens(to, tokenId, amount, nonce, {
+          gasLimit,
+          gasPrice
+        });
+        
+        console.log(`📤 Unlock transaction sent: ${tx.hash}`);
+        console.log(`⏳ Waiting for confirmation...`);
+        
+        const receipt = await tx.wait();
+        
+        if (receipt.status === 1) {
+          console.log(`✅ Tokens unlocked successfully on Polygon Chain!`);
+          console.log(`  📦 Block: ${receipt.blockNumber}`);
+          console.log(`  ⛽ Gas Used: ${receipt.gasUsed.toString()}`);
+          console.log(`  💰 Amount Unlocked: ${amount} to ${to}`);
+          return;
+        } else {
+          throw new Error("Transaction failed");
+        }
+        
+      } catch (error) {
+        retryCount++;
+        console.error(`❌ Relay transaction failed (attempt ${retryCount}/${maxRetries}):`, error.message);
+        
+        if (error.code === 'INSUFFICIENT_FUNDS') {
+          console.error("💸 Insufficient funds in relay wallet. Please fund the wallet.");
+          throw error;
+        }
+        
+        if (retryCount < maxRetries) {
+          console.log(`🔄 Retrying in 5 seconds...`);
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        } else {
+          throw error;
+        }
+      }
+    }
+  }
+
   async handleReconnection() {
     if (this.isShuttingDown) return;
     
@@ -315,6 +439,10 @@ class BridgeRelay {
     
     if (this.polygonBridge) {
       this.polygonBridge.removeAllListeners();
+    }
+    
+    if (this.bnbBridge) {
+      this.bnbBridge.removeAllListeners();
     }
     
     if (this.polygonProvider && this.polygonProvider.websocket) {

@@ -14,12 +14,14 @@ the Bnb Bridge to mint the same amount of ERC 20 on BNB!
 #### ✅ Completed Components
 
 1. **GondMockToken (ERC1155)** - `src/GondMockToken.sol`
+
    - ERC1155 token contract deployed on Polygon
    - Initial supply: 1,000,000 tokens (ID: 1)
    - Owner-controlled minting and burning capabilities
    - Token name: "GondMockToken", Symbol: "GMT"
 
 2. **PolygonBridge** - `src/PolygonBridge.sol`
+
    - Handles token locking on Polygon side
    - Accepts ERC1155 tokens and locks them in the contract
    - Emits `TokensLocked` event with nonce for cross-chain tracking
@@ -34,6 +36,7 @@ the Bnb Bridge to mint the same amount of ERC 20 on BNB!
    - Prevents double-spending via processed nonces mapping
 
 #### 🔧 Current Bridge Workflow
+
 - **Step 1**: User deposits ERC1155 tokens to PolygonBridge contract
 - **Step 2**: Contract locks tokens and emits `TokensLocked` event with nonce
 - **Step 3**: Off-chain relay service (manual for now) detects the event
@@ -41,9 +44,41 @@ the Bnb Bridge to mint the same amount of ERC 20 on BNB!
 - **Step 5**: ERC20 tokens minted on BNB Chain to user's address
 
 #### 🎯 Bridge Status
+
 - Polygon lock contract: ✅ Deployed and functional
-- BNB mint contract: ✅ Deployed and functional  
+- BNB mint contract: ✅ Deployed and functional
 - Owner permissions: ✅ Configured on both chains
 - Bridge authorization: ✅ Added to BNB contract
 - Event emission: ✅ Confirmed working on Polygon
 - Cross-chain token bridging: 🔄 Ready for testing
+
+## Reverse Bridging
+
+✅ Reverse bridging implemented successfully! Here's what was added:
+
+BnbBridge.sol (src/BnbBridge.sol:12,39-47):
+
+- Added TokensBurned event
+- Added burnNonce state variable
+- Added burnTokens() function to burn ERC20 tokens with destination Polygon address
+
+PolygonBridge.sol (src/PolygonBridge.sol:20-25,55-68):
+
+- Added TokensUnlocked event
+- Added bridges mapping and onlyBridge modifier
+- Added unlockTokens() function to release locked ERC1155 tokens
+
+relay-service.js (relay-service.js:143-158,303-396):
+
+- Added TokensBurned event listener on BNB chain
+- Added handleTokensBurned() to process burn events
+- Added relayToPolygonChain() to unlock tokens on Polygon
+- Enhanced error handling and nonce tracking for reverse operations
+
+The complete flow now works bidirectionally:
+
+1. Forward: Lock ERC1155 on Polygon → Mint ERC20 on BNB
+2. Reverse: Burn ERC20 on BNB → Unlock ERC1155 on Polygon
+
+Users can now call burnTokens(amount, polygonAddress) on BNB chain to trigger the reverse bridge back to their original tokens on
+Polygon.

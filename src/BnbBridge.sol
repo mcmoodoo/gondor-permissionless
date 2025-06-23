@@ -7,8 +7,10 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract BnbBridge is ERC20, Ownable {
     mapping(address => bool) public bridges;
     mapping(uint256 => bool) public processedNonces;
+    uint256 public burnNonce;
     
     event TokensMinted(address indexed to, uint256 amount, uint256 indexed nonce);
+    event TokensBurned(address indexed from, uint256 amount, string polygonAddress, uint256 indexed nonce);
     
     constructor(string memory name, string memory symbol) ERC20(name, symbol) Ownable(msg.sender) {}
     
@@ -32,5 +34,15 @@ contract BnbBridge is ERC20, Ownable {
         _mint(to, amount);
         
         emit TokensMinted(to, amount, nonce);
+    }
+    
+    function burnTokens(uint256 amount, string memory polygonAddress) external {
+        require(amount > 0, "Amount must be greater than 0");
+        require(balanceOf(msg.sender) >= amount, "Insufficient balance");
+        
+        burnNonce++;
+        _burn(msg.sender, amount);
+        
+        emit TokensBurned(msg.sender, amount, polygonAddress, burnNonce);
     }
 }

@@ -4,21 +4,9 @@ import { useNavigate } from 'react-router-dom';
 const pools = [
   {
     name: 'US recession in 2025?',
-    total_supply: '$2.03M',
-    borrow_rate: '6.92%',
-    total_borrowed: '$0.97M',
-  },
-  {
-    name: 'US recession in 2025?',
-    total_supply: '$2.03M',
-    borrow_rate: '6.92%',
-    total_borrowed: '$0.97M',
-  },
-  {
-    name: 'US recession in 2025?',
-    total_supply: '$2.03M',
-    borrow_rate: '6.92%',
-    total_borrowed: '$0.97M',
+    total_supply: '$1.00 B',
+    borrow_rate: '9.78%',
+    total_borrowed: '$0.01M',
   },
 ];
 
@@ -26,21 +14,92 @@ const yourLoans = [
     {
         name: 'US recession in 2025?',
         debt: '$100 / 100USDT',
-        rate: '6.92%',
-    },
-    {
-        name: 'US recession in 2025?',
-        debt: '$100 / 100USDT',
-        rate: '6.92%',
+        rate: '9.78%',
     },
 ];
+
+// RepayModal component
+function RepayModal({ open, onClose, loan }) {
+  if (!open || !loan) return null;
+  // Example values for the modal (replace with real data as needed)
+  const token = {
+    symbol: 'USDT',
+    image: require('../tether-logo.webp'),
+  };
+  const amount = 0.00;
+  const amountUSD = 0.00;
+  const totalSupply = 0.00;
+  const remainingSupply = 0.0;
+  const healthFactor = 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-auto p-8 relative animate-fade-in">
+        {/* Close button */}
+        <button
+          className="absolute top-5 right-5 text-gray-400 hover:text-gray-600"
+          onClick={onClose}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        <h2 className="text-xl font-bold text-gray-900 mb-6 text-center">Repay loan</h2>
+        <div className="bg-slate-50 rounded-xl p-5 mb-6">
+          <div className="text-sm text-gray-500 mb-2">Amount</div>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <img src={token.image} alt={token.symbol} className="w-7 h-7 rounded-full" />
+              <span className="font-semibold text-gray-900">{token.symbol}</span>
+            </div>
+            <div className="text-2xl font-bold text-gray-900">{amount}</div>
+          </div>
+          <div className="text-right text-gray-400 text-xs mt-1">${amountUSD}</div>
+          <div className="flex justify-between mt-4 gap-2">
+            <button className="flex-1 bg-blue-50 text-blue-600 font-semibold py-2 rounded-lg">25%</button>
+            <button className="flex-1 bg-blue-50 text-blue-600 font-semibold py-2 rounded-lg">50%</button>
+            <button className="flex-1 bg-blue-50 text-blue-600 font-semibold py-2 rounded-lg">75%</button>
+            <button className="flex-1 bg-blue-600 text-white font-semibold py-2 rounded-lg">MAX</button>
+          </div>
+        </div>
+        <div className="space-y-2 text-sm text-gray-700 mb-6">
+          <div className="flex justify-between">
+            <span>Total supply</span>
+            <span className="font-medium text-gray-900">${totalSupply}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Remaining supply</span>
+            <span className="font-medium text-gray-900">${remainingSupply}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Health factor</span>
+            <span className="font-medium text-gray-900">{healthFactor}</span>
+          </div>
+        </div>
+        <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 rounded-full text-lg transition">Repay</button>
+      </div>
+    </div>
+  );
+}
 
 export default function BorrowListPage() {
   const navigate = useNavigate();
   const [showLoanDetails, setShowLoanDetails] = useState(true);
+  const [repayModalOpen, setRepayModalOpen] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState(null);
 
   const handlePoolClick = (pool) => {
     navigate(`/borrow/${encodeURIComponent(pool.name)}`);
+  };
+
+  const handleRepayClick = (loan) => {
+    setSelectedLoan(loan);
+    setRepayModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setRepayModalOpen(false);
+    setSelectedLoan(null);
   };
 
   return (
@@ -64,15 +123,15 @@ export default function BorrowListPage() {
             <div className="flex space-x-8 text-center">
               <div>
                 <div className="text-sm text-gray-500 mb-1">Total borrowed</div>
-                <div className="text-2xl font-bold text-gray-900">$200.07</div>
+                <div className="text-2xl font-bold text-gray-900">$100.00</div>
               </div>
               <div>
                 <div className="text-sm text-gray-500 mb-1">Rate to pay</div>
-                <div className="text-2xl font-bold text-gray-900">$12.07</div>
+                <div className="text-2xl font-bold text-gray-900">$0.01</div>
               </div>
               <div>
                 <div className="text-sm text-gray-500 mb-1">Net rate</div>
-                <div className="text-2xl font-bold text-gray-900">6.92%</div>
+                <div className="text-2xl font-bold text-gray-900">9.78%</div>
               </div>
             </div>
           </div>
@@ -109,7 +168,7 @@ export default function BorrowListPage() {
                                 <td className="py-4 text-gray-700">{loan.debt}</td>
                                 <td className="py-4 text-gray-700">{loan.rate}</td>
                                 <td className="py-4 text-right">
-                                    <button className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-6 rounded-full transition">
+                                    <button className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-6 rounded-full transition" onClick={() => handleRepayClick(loan)}>
                                         Repay
                                     </button>
                                 </td>
@@ -165,6 +224,8 @@ export default function BorrowListPage() {
           </div>
         </div>
       </div>
+      {/* Repay Modal */}
+      <RepayModal open={repayModalOpen} onClose={handleCloseModal} loan={selectedLoan} />
     </div>
   );
 } 

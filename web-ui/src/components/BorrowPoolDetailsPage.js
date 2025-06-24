@@ -432,7 +432,7 @@ export default function BorrowPoolDetailsPage() {
       setOraclePrice(formatUnits(price, 18));
 
     } catch (error) {
-      console.error('Error fetching contract data:', error);
+      // console.error('Error fetching contract data:', error);
       let errorMessage = 'Error fetching contract data';
       
       if (error.message.includes('network')) {

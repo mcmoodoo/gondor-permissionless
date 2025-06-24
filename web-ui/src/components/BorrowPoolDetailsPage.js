@@ -277,9 +277,9 @@ export default function BorrowPoolDetailsPage() {
     borrowRate: '0'
   });
   const [userPosition, setUserPosition] = useState({
-    supplied: '0',
-    borrowed: '0',
-    collateral: '0'
+    supplied: '.34',
+    borrowed: '12',
+    collateral: '10'
   });
   const [borrowableAmount, setBorrowableAmount] = useState('0');
   const [oraclePrice, setOraclePrice] = useState('0');
@@ -720,21 +720,21 @@ export default function BorrowPoolDetailsPage() {
             <div className="flex items-center divide-x divide-gray-200">
               <div className="text-center pr-6">
                 <div className="text-sm text-gray-500 mb-1">Total supply</div>
-                <div className="text-2xl font-bold text-gray-900">{parseFloat(poolInfo.totalSupply).toFixed(2)} ETH</div>
+                <div className="text-2xl font-bold text-gray-900">$1.00 B </div>
               </div>
               <div className="text-center px-6">
                 <div className="text-sm text-gray-500 mb-1">Total borrowed</div>
-                <div className="text-2xl font-bold text-gray-900">{parseFloat(poolInfo.totalBorrowed).toFixed(2)} ETH</div>
+                <div className="text-2xl font-bold text-gray-900">$0.01 M </div>
               </div>
               <div className="text-center px-6">
                 <div className="text-sm text-gray-500 mb-1 flex items-center justify-center">
                   Borrow rate <Info className="w-3 h-3 ml-1 text-gray-400" />
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{parseFloat(poolInfo.borrowRate).toFixed(2)}%</div>
+                <div className="text-2xl font-bold text-gray-900">9.78%</div>
               </div>
               <div className="text-center pl-6">
                 <div className="text-sm text-gray-500 mb-1">Oracle price</div>
-                <div className="text-2xl font-bold text-gray-900">${parseFloat(oraclePrice).toFixed(2)}</div>
+                <div className="text-2xl font-bold text-gray-900">$0.73</div>
               </div>
             </div>
           </div>
@@ -898,7 +898,7 @@ export default function BorrowPoolDetailsPage() {
                   disabled={ltvValue > 82 || loading || !walletConnected || !borrowAmount}
                   className="w-48 bg-gradient-to-br from-blue-400 to-blue-600 text-white py-3 rounded-full font-medium shadow-md transition-transform transform enabled:hover:scale-105 enabled:hover:from-blue-500 enabled:hover:to-blue-700 disabled:bg-none disabled:bg-gray-400 disabled:cursor-not-allowed disabled:shadow-none"
                 >
-                  {loading ? 'Processing...' : 'Borrow'}
+                  {loading ? 'Processing...' : 'Deposit & Borrow'}
                 </button>
               </div>
             </div>
@@ -910,29 +910,27 @@ export default function BorrowPoolDetailsPage() {
             
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-gray-700">Supplied</span>
-                <span className="font-medium text-gray-900">{parseFloat(userPosition.supplied).toFixed(6)} ETH</span>
+                <span className="text-gray-700">Liquidation price</span>
+                <span className="font-medium text-gray-900">--</span>
               </div>
               
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Borrowed</span>
-                <span className="font-medium text-gray-900">{parseFloat(userPosition.borrowed).toFixed(6)} ETH</span>
-              </div>
               
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Collateral</span>
-                <span className="font-medium text-gray-900">{parseFloat(userPosition.collateral).toFixed(6)} ETH</span>
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-gray-700">Borrowable Amount</span>
-                <span className="font-medium text-green-600">{parseFloat(borrowableAmount).toFixed(6)} ETH</span>
-              </div>
               
               <div className="flex justify-between items-center">
                 <span className="text-gray-700">Current LTV</span>
                 <span className="font-medium text-gray-900">{ltvValue.toFixed(2)}%</span>
               </div>
+              
+              <div className="flex justify-between items-center">
+                <span className="text-gray-700">Current loan</span>
+                <span className="font-medium text-gray-900">{ltvValue.toFixed(2)} </span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-gray-700">Health rate</span>
+                <span className="font-medium text-green-600">--% </span>
+              </div>
+              
             </div>
           </div>
         </div>

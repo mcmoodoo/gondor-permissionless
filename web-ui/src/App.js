@@ -9,8 +9,12 @@ import Layout from './components/Layout';
 function SpendPage() {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-bold mb-4">Spend</h1>
-      <p className="text-lg text-gray-600">This is the Spend page. (Design me!)</p>
+      <img
+        src={require('./Screenshot 2025-06-23 at 8.51.29 PM.png')}
+        alt="Spend Page Screenshot"
+        className="rounded-xl "
+        style={{ objectFit: 'contain' }}
+      />
     </div>
   );
 }

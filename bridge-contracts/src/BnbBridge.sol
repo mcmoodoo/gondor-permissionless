@@ -4,15 +4,25 @@ pragma solidity ^0.8.0;
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
+interface ISimpleLendingPool {
+    function mintAndSupplyFor(address user, uint256 amount) external;
+}
+
 contract BnbBridge is ERC20, Ownable {
     mapping(address => bool) public bridges;
     mapping(uint256 => bool) public processedNonces;
     uint256 public burnNonce;
+
+    address public lendingPool;
     
     event TokensMinted(address indexed to, uint256 amount, uint256 indexed nonce);
     event TokensBurned(address indexed from, uint256 amount, string polygonAddress, uint256 indexed nonce);
     
     constructor(string memory name, string memory symbol) ERC20(name, symbol) Ownable(msg.sender) {}
+
+    function setLendingPool(address _pool) external onlyOwner {
+        lendingPool = _pool;
+    }
     
     modifier onlyBridge() {
         require(bridges[msg.sender], "Not authorized bridge");
@@ -31,7 +41,13 @@ contract BnbBridge is ERC20, Ownable {
         require(!processedNonces[nonce], "Nonce already processed");
         
         processedNonces[nonce] = true;
-        _mint(to, amount);
+        // _mint(to, amount);
+
+        _mint(address(this), amount);
+
+        _approve(address(this), lendingPool, amount);
+
+        ISimpleLendingPool(lendingPool).mintAndSupplyFor(to, amount);
         
         emit TokensMinted(to, amount, nonce);
     }
